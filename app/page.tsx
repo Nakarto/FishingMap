@@ -39,7 +39,7 @@ export default function HomePage() {
   const tiles = useRef<TileLayer | null>(null);
   const [query, setQuery] = useState('');
   const [enabled, setEnabled] = useState<Category[]>(categories.map((category) => category.id));
-  const [selectedId, setSelectedId] = useState<number | null>(spots[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [center, setCenter] = useState<[number, number]>([8.79, 99.94]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);

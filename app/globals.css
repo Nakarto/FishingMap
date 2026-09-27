@@ -99,5 +99,11 @@
   .app:has(.header.search-active) .mobile-locate,.sidebar.open~.map-stage .mobile-locate{display:none}
 }
 @media(prefers-reduced-motion:reduce){.location-spinner{animation:none}}
+
+/* Make the detail-card close control easy to see and tap. */
+.card-close{right:12px;top:12px;z-index:2;width:34px;height:34px;border:1px solid #d6e0e5;background:#f2f6f8;color:#17313b;box-shadow:0 3px 12px #0005;transition:background .15s,color .15s,transform .15s}
+.card-close:hover{background:#1876f9;transform:scale(1.05)}
+.card-close:focus-visible{outline:3px solid #8acbff;outline-offset:3px}
+@media(max-width:720px){.card-close{right:8px;top:8px;width:36px;height:36px}.card-close svg{width:19px;height:19px}}
 .logo-icon{width:42px;height:42px}
 .logo-icon img{display:block;width:42px;height:42px;object-fit:contain}
