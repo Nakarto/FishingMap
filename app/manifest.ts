@@ -10,8 +10,8 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: '#071319',
     theme_color: '#081319',
     icons: [
-      { src: '/fishingmap-logo.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/fishingmap-logo.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      { src: '/fishingmap-logo.png', sizes: '1254x1254', type: 'image/png', purpose: 'any' },
+      { src: '/fishingmap-logo.png', sizes: '1254x1254', type: 'image/png', purpose: 'maskable' },
     ],
   };
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { LayerGroup, Map as LeafletMap, TileLayer } from 'leaflet';
-import { Bookmark, Check, Compass, Fish, LoaderCircle, LocateFixed, Map, MapPin, Navigation, Satellite, Share2, Ship, SlidersHorizontal, Store, X } from 'lucide-react';
+import { Bookmark, Check, Compass, Fish, LoaderCircle, LocateFixed, Map as MapIcon, MapPin, Navigation, Satellite, Share2, Ship, SlidersHorizontal, Store, X } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { LEVEL_COLOR, LEVEL_LABEL, spots } from '@/data/spots';
@@ -45,6 +45,12 @@ export default function HomePage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [layer, setLayer] = useState<'satellite' | 'streets'>('satellite');
   const [saved, setSaved] = useState<number[]>([]);
+  const [savedReady, setSavedReady] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+  const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
+  const [expandedDescription, setExpandedDescription] = useState(false);
+  const [overlappingSpots, setOverlappingSpots] = useState<Spot[]>([]);
+  const [mapError, setMapError] = useState(false);
   const [notice, setNotice] = useState('');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'found'>('idle');
@@ -52,12 +58,44 @@ export default function HomePage() {
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('th');
-    return spots.filter((spot) => enabled.includes(spot.level)
+    return spots.filter((spot) => enabled.includes(spot.level) && (!showSaved || saved.includes(spot.id))
       && `${spot.name} ${spot.water} ${spot.desc} ${spot.fish.join(' ')}`.toLocaleLowerCase('th').includes(needle));
-  }, [enabled, query]);
+  }, [enabled, query, saved, showSaved]);
   const selected = spots.find((spot) => spot.id === selectedId) ?? null;
   const distance = selected && userLocation ? distanceKm(userLocation, selected) : null;
-  const searchSuggestions = filtered.slice(0, 8);
+  const searchSuggestions = filtered;
+  const nearbySpots = useMemo(() => userLocation
+    ? [...filtered].sort((a, b) => distanceKm(userLocation, a) - distanceKm(userLocation, b))
+    : filtered, [filtered, userLocation]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('fishingmap:saved');
+      if (stored) {
+        const parsed: unknown = JSON.parse(stored);
+        if (Array.isArray(parsed)) setSaved(parsed.filter((id): id is number => Number.isInteger(id) && spots.some((spot) => spot.id === id)));
+      }
+    } catch {
+      setNotice('อ่านรายการโปรดที่บันทึกไว้ไม่ได้');
+    } finally {
+      setSavedReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!savedReady) return;
+    try {
+      window.localStorage.setItem('fishingmap:saved', JSON.stringify(saved));
+    } catch {
+      setNotice('บันทึกรายการโปรดไม่ได้ พื้นที่จัดเก็บอาจเต็ม');
+    }
+  }, [saved, savedReady]);
+
+  useEffect(() => {
+    if (selectedId !== null && !filtered.some((spot) => spot.id === selectedId)) setSelectedId(null);
+  }, [filtered, selectedId]);
+
+  useEffect(() => setExpandedDescription(false), [selectedId]);
 
   useLayoutEffect(() => {
     const stage = mapElement.current?.parentElement;
@@ -78,29 +116,56 @@ export default function HomePage() {
     let disposed = false;
     void import('leaflet').then((L) => {
       if (disposed || !mapElement.current) return;
-      const isNewMap = !map.current;
-      if (!map.current) map.current = L.map(mapElement.current, { zoomControl: false }).setView(center, 9);
-      const instance = map.current;
-      if (tiles.current) instance.removeLayer(tiles.current);
-      tiles.current = L.tileLayer(mapTiles[layer], {
+      if (map.current) return;
+      map.current = L.map(mapElement.current, { zoomControl: false }).setView(center, 9);
+      L.control.zoom({ position: 'bottomright' }).addTo(map.current);
+      requestAnimationFrame(() => map.current?.invalidateSize({ pan: false }));
+      setMapError(false);
+    }).catch(() => { if (!disposed) setMapError(true); });
+    return () => { disposed = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!map.current) return;
+    let disposed = false;
+    void import('leaflet').then((L) => {
+      if (disposed || !map.current) return;
+      if (tiles.current) map.current.removeLayer(tiles.current);
+      const tileLayer = L.tileLayer(mapTiles[layer], {
         attribution: layer === 'satellite' ? 'Tiles &copy; Esri' : '&copy; OpenStreetMap contributors', maxZoom: 19,
-      }).addTo(instance);
-      if (markers.current) instance.removeLayer(markers.current);
-      const markerGroup = L.layerGroup().addTo(instance);
-      markers.current = markerGroup;
-      filtered.forEach((spot) => {
-        const symbol: Record<Category, string> = { shop: '▣', bait: '◆', fishing: '●', boat: '⛵' };
-        const icon = L.divIcon({ className: 'marker-wrap', html: `<div class="map-pin ${selectedId === spot.id ? 'pin-active' : ''}" style="--pin-color:${LEVEL_COLOR[spot.level]}"><span>${symbol[spot.level]}</span></div>`, iconSize: [42, 52], iconAnchor: [21, 47] });
-        L.marker([spot.lat, spot.lng], { icon }).on('click', () => { setSelectedId(spot.id); setCenter([spot.lat, spot.lng]); }).addTo(markerGroup);
       });
-      if (userLocation) L.circleMarker([userLocation.lat, userLocation.lng], { radius: 8, color: '#fff', weight: 3, fillColor: '#1876f9', fillOpacity: 1 }).bindTooltip('ตำแหน่งของคุณ').addTo(markerGroup);
-      if (isNewMap) {
-        L.control.zoom({ position: 'bottomright' }).addTo(instance);
-        requestAnimationFrame(() => instance.invalidateSize({ pan: false }));
-      }
+      tileLayer.on('tileerror', () => setMapError(true));
+      tileLayer.on('tileload', () => setMapError(false));
+      tiles.current = tileLayer.addTo(map.current);
     });
     return () => { disposed = true; };
-  }, [filtered, layer, selectedId, userLocation]);
+  }, [layer]);
+
+  useEffect(() => {
+    if (!map.current) return;
+    let disposed = false;
+    void import('leaflet').then((L) => {
+      if (disposed || !map.current) return;
+      markers.current?.clearLayers();
+      if (!markers.current) markers.current = L.layerGroup().addTo(map.current);
+      const grouped = new Map<string, Spot[]>();
+      filtered.forEach((spot) => {
+        const key = `${spot.lat},${spot.lng}`;
+        grouped.set(key, [...(grouped.get(key) ?? []), spot]);
+      });
+      grouped.forEach((group) => {
+        const spot = group[0];
+        const symbol: Record<Category, string> = { shop: '▣', bait: '◆', fishing: '●', boat: '⛵' };
+        const icon = L.divIcon({ className: 'marker-wrap', html: `<div class="map-pin ${group.some((item) => selectedId === item.id) ? 'pin-active' : ''}" style="--pin-color:${LEVEL_COLOR[spot.level]}"><span>${symbol[spot.level]}</span></div>`, iconSize: [42, 52], iconAnchor: [21, 47] });
+        L.marker([spot.lat, spot.lng], { icon }).on('click', () => {
+          if (group.length > 1) setOverlappingSpots(group);
+          else { setOverlappingSpots([]); setSelectedId(spot.id); setCenter([spot.lat, spot.lng]); }
+        }).addTo(markers.current!);
+      });
+      if (userLocation) L.circleMarker([userLocation.lat, userLocation.lng], { radius: 8, color: '#fff', weight: 3, fillColor: '#1876f9', fillOpacity: 1 }).bindTooltip('ตำแหน่งของคุณ').addTo(markers.current);
+    });
+    return () => { disposed = true; };
+  }, [filtered, selectedId, userLocation]);
 
   useEffect(() => {
     if (map.current) map.current.flyTo(center, Math.max(map.current.getZoom(), 10), { duration: 0.7 });
@@ -147,15 +212,26 @@ export default function HomePage() {
   const share = async () => {
     if (!selected) return;
     const url = `https://www.google.com/maps/search/?api=1&query=${selected.lat},${selected.lng}`;
-    if (navigator.share) { try { await navigator.share({ title: selected.name, url }); } catch { /* user cancelled */ } }
-    else { await navigator.clipboard.writeText(url); setNotice('คัดลอกลิงก์แล้ว'); }
+    if (navigator.share) {
+      try { await navigator.share({ title: selected.name, url }); return; }
+      catch (error) { if (error instanceof DOMException && error.name === 'AbortError') return; }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setNotice('คัดลอกลิงก์แผนที่แล้ว');
+    } catch {
+      window.prompt('คัดลอกลิงก์นี้เพื่อแชร์', url);
+      setNotice('คัดลอกลิงก์ไม่สำเร็จ กรุณาคัดลอกจากช่องข้อความ');
+    }
   };
+
+  const chooseSpot = (spot: Spot) => { setOverlappingSpots([]); choose(spot); };
 
   return <div className={`app${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
     <Header query={query} onQueryChange={setQuery} suggestions={searchSuggestions} onSelectSuggestion={selectSuggestion} onOpenMenu={toggleNavigation} onToggleLayer={() => setLayer((value) => value === 'satellite' ? 'streets' : 'satellite')} onLocate={locate} onToggleMenu={toggleNavigation} />
     <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
       <div className="sidebar-title"><span>สำรวจแผนที่</span><button className="close-menu" onClick={() => setMenuOpen(false)} aria-label="ปิดเมนู"><X size={20} /></button></div>
-      <div className="side-categories">{categories.map((category) => { const Icon = category.icon; return <button key={category.id} className={enabled.includes(category.id) ? 'enabled' : ''} onClick={() => toggle(category.id)}><span className="cat-icon" style={{ background: LEVEL_COLOR[category.id] }}><Icon size={17} /></span>{category.label}<span className="side-check">{enabled.includes(category.id) && <Check size={13} />}</span></button>; })}</div>
+      <div className="side-categories">{categories.map((category) => { const Icon = category.icon; const active = enabled.includes(category.id); return <button key={category.id} className={active ? 'enabled' : ''} aria-pressed={active} onClick={() => toggle(category.id)}><span className="cat-icon" style={{ background: LEVEL_COLOR[category.id] }}><Icon size={17} /></span>{category.label}<span className="side-check">{active && <Check size={13} />}</span></button>; })}</div>
       <fieldset className="map-layers">
         <legend>เลเยอร์แผนที่</legend>
         <div className="map-layer-options">
@@ -170,7 +246,7 @@ export default function HomePage() {
           <label className="map-layer-option">
             <input type="radio" name="map-layer" value="streets" checked={layer === 'streets'} onChange={() => setLayer('streets')} />
             <span className="map-layer-card">
-              <span className="map-layer-icon"><Map size={23} aria-hidden="true" /></span>
+              <span className="map-layer-icon"><MapIcon size={23} aria-hidden="true" /></span>
               <strong>แผนที่ปกติ</strong><small>ดูถนนและเส้นทาง</small>
               <span className="map-layer-check" aria-hidden="true"><Check size={12} /></span>
             </span>
@@ -193,14 +269,19 @@ export default function HomePage() {
       <div className="sidebar-bottom"><Compass size={19} /> {spots.length} สถานที่ในนครศรีธรรมราช</div>
     </aside>
     {menuOpen && <button className="scrim" aria-label="ปิดตัวกรอง" onClick={() => setMenuOpen(false)} />}
-    <main className="map-stage">
+    <main className={`map-stage${viewMode === 'list' ? ' list-view' : ''}`}>
       <div ref={mapElement} className="map" />
-      <div className="map-shade" /><div className="map-label">สำรวจนครศรีธรรมราช <span>● {filtered.length} สถานที่</span></div>
+      <div className="map-shade" /><div className="map-label">สำรวจนครศรีธรรมราช <span>● {filtered.length} สถานที่</span>{query.trim() && <button className="active-query" onClick={() => setQuery('')}>ค้นหา: {query} ×</button>}</div>
+      <button className="saved-toggle" type="button" aria-pressed={showSaved} onClick={() => setShowSaved((current) => !current)}><Bookmark size={17} />{showSaved ? 'แสดงทั้งหมด' : `รายการโปรด ${saved.length}`}</button>
+      <button className="view-toggle" type="button" aria-pressed={viewMode === 'list'} onClick={() => setViewMode((mode) => mode === 'map' ? 'list' : 'map')}>{viewMode === 'map' ? 'ดูเป็นรายการ' : 'กลับไปแผนที่'}</button>
+      {mapError && <div className="map-error" role="status">โหลดแผนที่ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่ <button onClick={() => { setMapError(false); setLayer((current) => current); tiles.current?.redraw(); }}>ลองอีกครั้ง</button></div>}
       <button type="button" className={`mobile-locate${selected ? ' above-card' : ''}${locationStatus === 'found' ? ' is-located' : ''}`} onClick={locate} disabled={locationStatus === 'loading'} aria-busy={locationStatus === 'loading'} aria-label={locationStatus === 'loading' ? 'กำลังค้นหาตำแหน่งของฉัน' : 'แสดงตำแหน่งของฉัน'} title="แสดงตำแหน่งของฉัน">
         {locationStatus === 'loading' ? <LoaderCircle className="location-spinner" size={24} aria-hidden="true" /> : <LocateFixed size={24} aria-hidden="true" />}
       </button>
-      <div className="mobile-categories">{categories.map((category) => { const Icon = category.icon; return <button key={category.id} className={enabled.includes(category.id) ? 'on' : ''} onClick={() => toggle(category.id)}><span style={{ background: LEVEL_COLOR[category.id] }}><Icon size={16} /></span>{category.label}</button>; })}</div>
-      {selected && <article className="detail-card"><div className="card-handle" /><button className="card-close" onClick={() => setSelectedId(null)} aria-label="ปิดรายละเอียด"><X size={19} /></button><div className={`card-image category-${selected.level}`}><CategoryVisual level={selected.level} /></div><div className="card-content"><div className="card-type"><span style={{ background: LEVEL_COLOR[selected.level] }} /> {LEVEL_LABEL[selected.level]}</div><h1>{selected.name}</h1><p className="meta"><MapPin size={16} />{selected.lat.toFixed(5)}, {selected.lng.toFixed(5)}</p><p className="meta"><Compass size={16} />{selected.water}</p>{distance !== null && <p className="meta"><Navigation size={16} />{distance.toFixed(1)} กม. จากตำแหน่งของคุณ</p>}<p className="card-description">{selected.desc}</p><div className="tags">{selected.fish.map((item) => <span key={item}>{item}</span>)}</div><div className="card-actions"><a className="primary" href={`https://www.google.com/maps/dir/?api=1&destination=${selected.lat},${selected.lng}`} target="_blank" rel="noreferrer"><Navigation size={16} /> เส้นทาง</a><button onClick={() => setSaved((current) => current.includes(selected.id) ? current.filter((id) => id !== selected.id) : [...current, selected.id])}><Bookmark size={16} fill={saved.includes(selected.id) ? 'currentColor' : 'none'} />{saved.includes(selected.id) ? 'บันทึกแล้ว' : 'บันทึก'}</button><button onClick={share}><Share2 size={16} /> แชร์</button></div></div></article>}
+      <div className="mobile-categories">{categories.map((category) => { const Icon = category.icon; const active = enabled.includes(category.id); return <button key={category.id} className={active ? 'on' : ''} aria-pressed={active} onClick={() => toggle(category.id)}><span style={{ background: LEVEL_COLOR[category.id] }}><Icon size={16} /></span>{category.label}</button>; })}</div>
+      {viewMode === 'list' && <section className="nearby-list" aria-label="สถานที่ใกล้ฉัน"><h2>{userLocation ? 'สถานที่ใกล้ฉัน · ระยะทางตรง' : 'สถานที่ทั้งหมด'}</h2>{!userLocation && <p>กดปุ่มตำแหน่งเพื่อเรียงตามระยะทางจากคุณ</p>}{nearbySpots.map((spot) => <button key={spot.id} onClick={() => choose(spot)}><span className="nearby-dot" style={{ background: LEVEL_COLOR[spot.level] }} /><span><strong>{spot.name}</strong><small>{LEVEL_LABEL[spot.level]} · {spot.water}</small></span>{userLocation && <em>{distanceKm(userLocation, spot).toFixed(1)} กม.</em>}</button>)}</section>}
+      {overlappingSpots.length > 0 && <section className="overlap-picker" aria-label="เลือกสถานที่"><strong>มี {overlappingSpots.length} แห่งในจุดนี้</strong>{overlappingSpots.map((spot) => <button key={spot.id} onClick={() => chooseSpot(spot)}>{spot.name} · {LEVEL_LABEL[spot.level]}</button>)}<button onClick={() => setOverlappingSpots([])}>ปิด</button></section>}
+      {selected && <article className="detail-card"><div className="card-handle" /><button className="card-close" onClick={() => setSelectedId(null)} aria-label="ปิดรายละเอียด"><X size={19} /></button><div className={`card-image category-${selected.level}`}><CategoryVisual level={selected.level} /></div><div className="card-content"><div className="card-type"><span style={{ background: LEVEL_COLOR[selected.level] }} /> {LEVEL_LABEL[selected.level]}</div><h1>{selected.name}</h1><p className="meta"><MapPin size={16} />{selected.lat.toFixed(5)}, {selected.lng.toFixed(5)}</p><p className="meta"><Compass size={16} />{selected.water}</p>{distance !== null && <p className="meta"><Navigation size={16} />{distance.toFixed(1)} กม. (ระยะทางตรง)</p>}<p className={`card-description${expandedDescription ? ' expanded' : ''}`}>{selected.desc}</p>{selected.desc.length > 120 && <button className="read-more" onClick={() => setExpandedDescription((value) => !value)}>{expandedDescription ? 'ย่อรายละเอียด' : 'อ่านรายละเอียดเพิ่มเติม'}</button>}<div className="tags">{selected.fish.filter((item) => !item.startsWith('เบอร์โทร:')).map((item) => <span key={item}>{item}</span>)}</div><div className="card-actions"><a className="primary" href={`https://www.google.com/maps/dir/?api=1&destination=${selected.lat},${selected.lng}`} target="_blank" rel="noreferrer"><Navigation size={16} /> เส้นทาง</a><button onClick={() => setSaved((current) => current.includes(selected.id) ? current.filter((id) => id !== selected.id) : [...current, selected.id])}><Bookmark size={16} fill={saved.includes(selected.id) ? 'currentColor' : 'none'} />{saved.includes(selected.id) ? 'บันทึกแล้ว' : 'บันทึก'}</button><button onClick={share}><Share2 size={16} /> แชร์</button></div>{selected.fish.filter((item) => item.startsWith('เบอร์โทร:') && !item.includes('ยังไม่มีข้อมูล')).map((item) => item.replace('เบอร์โทร:', '').split(',').map((phone) => <a className="phone-link" key={phone} href={`tel:${phone.trim()}`}>โทร {phone.trim()}</a>))}</div></article>}
       {notice && <div className="notice" role="status">{notice}</div>}<Footer />
     </main>
   </div>;
