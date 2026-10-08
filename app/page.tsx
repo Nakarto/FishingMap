@@ -269,7 +269,7 @@ export default function HomePage() {
       <div className="sidebar-bottom"><Compass size={19} /> {spots.length} สถานที่ในนครศรีธรรมราช</div>
     </aside>
     {menuOpen && <button className="scrim" aria-label="ปิดตัวกรอง" onClick={() => setMenuOpen(false)} />}
-    <main className={`map-stage${viewMode === 'list' ? ' list-view' : ''}`}>
+    <main className={`map-stage${viewMode === 'list' ? ' list-view' : ''}${mapError && overlappingSpots.length ? ' has-stacked-notices' : ''}`}>
       <div ref={mapElement} className="map" />
       <div className="map-shade" /><div className="map-label">สำรวจนครศรีธรรมราช <span>● {filtered.length} สถานที่</span>{query.trim() && <button className="active-query" onClick={() => setQuery('')}>ค้นหา: {query} ×</button>}</div>
       <button className="saved-toggle" type="button" aria-pressed={showSaved} onClick={() => setShowSaved((current) => !current)}><Bookmark size={17} />{showSaved ? 'แสดงทั้งหมด' : `รายการโปรด ${saved.length}`}</button>

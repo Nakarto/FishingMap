@@ -156,3 +156,27 @@
 .nearby-list em{font-size:13px;font-style:normal;white-space:nowrap}
 .map-stage.list-view .map,.map-stage.list-view .map-shade,.map-stage.list-view .mobile-categories,.map-stage.list-view .mobile-locate{display:none}
 @media(max-width:720px){.view-toggle{top:114px;right:12px}.nearby-list{inset:12px 8px;padding:14px}}
+
+/* Keep floating controls in a single toolbar above the category filters. */
+@media(max-width:720px){
+  .saved-toggle,.view-toggle{top:8px;right:auto;left:auto;width:calc(50% - 18px);height:44px;justify-content:center}
+  .saved-toggle{left:12px}
+  .view-toggle{right:12px}
+  .mobile-categories{top:60px;max-height:106px;overflow:auto;align-content:start}
+  .map-label{top:8px;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:calc(100% - 24px);height:44px;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;pointer-events:none}
+  .map-label span,.map-label .active-query{display:none}
+  .map-error,.overlap-picker{top:174px;max-height:calc(100dvh - 190px);overflow:auto}
+  .map-stage.has-stacked-notices .map-error{top:166px}
+  .map-stage.has-stacked-notices .overlap-picker{top:280px}
+  .notice{top:174px;left:50%;max-width:calc(100% - 24px);text-align:center}
+  .nearby-list{top:62px;bottom:10px}
+  .map-stage.list-view .map-label{display:none}
+  .map-stage.list-view .mobile-categories{display:none}
+  .map-stage.list-view .saved-toggle,.map-stage.list-view .view-toggle{z-index:630}
+}
+@media(max-height:500px) and (max-width:720px){
+  .mobile-categories{display:none}
+  .map-error,.overlap-picker,.notice{top:62px}
+  .map-stage.has-stacked-notices .overlap-picker{top:170px}
+  .nearby-list{top:62px}
+}
