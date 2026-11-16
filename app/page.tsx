@@ -55,6 +55,8 @@ export default function HomePage() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'loading' | 'found'>('idle');
   const locatingRef = useRef(false);
+  // Search selections pan to the spot at the current zoom instead of zooming in.
+  const keepZoomRef = useRef(false);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('th');
@@ -168,7 +170,13 @@ export default function HomePage() {
   }, [filtered, selectedId, userLocation]);
 
   useEffect(() => {
-    if (map.current) map.current.flyTo(center, Math.max(map.current.getZoom(), 10), { duration: 0.7 });
+    if (!map.current) return;
+    if (keepZoomRef.current) {
+      keepZoomRef.current = false;
+      map.current.panTo(center, { animate: true, duration: 0.7 });
+    } else {
+      map.current.flyTo(center, Math.max(map.current.getZoom(), 10), { duration: 0.7 });
+    }
   }, [center]);
 
   useEffect(() => () => { map.current?.remove(); map.current = null; }, []);
@@ -187,7 +195,7 @@ export default function HomePage() {
 
   const toggle = (id: Category) => setEnabled((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const choose = (spot: Spot) => { setSelectedId(spot.id); setCenter([spot.lat, spot.lng]); setMenuOpen(false); };
-  const selectSuggestion = (spot: Spot) => { setQuery(spot.name); choose(spot); };
+  const selectSuggestion = (spot: Spot) => { keepZoomRef.current = true; setQuery(spot.name); choose(spot); };
   const toggleNavigation = () => {
     if (window.matchMedia('(max-width:720px)').matches) setMenuOpen((open) => !open);
     else setSidebarCollapsed((collapsed) => !collapsed);
