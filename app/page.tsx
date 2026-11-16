@@ -273,7 +273,7 @@ export default function HomePage() {
       <div ref={mapElement} className="map" />
       <div className="map-shade" /><div className="map-label">สำรวจนครศรีธรรมราช <span>● {filtered.length} สถานที่</span>{query.trim() && <button className="active-query" onClick={() => setQuery('')}>ค้นหา: {query} ×</button>}</div>
       <button className="saved-toggle" type="button" aria-pressed={showSaved} onClick={() => setShowSaved((current) => !current)}><Bookmark size={17} />{showSaved ? 'แสดงทั้งหมด' : `รายการโปรด ${saved.length}`}</button>
-      <button className="view-toggle" type="button" aria-pressed={viewMode === 'list'} onClick={() => setViewMode((mode) => mode === 'map' ? 'list' : 'map')}>{viewMode === 'map' ? 'ดูเป็นรายการ' : 'กลับไปแผนที่'}</button>
+      <button className="view-toggle" type="button" aria-pressed={viewMode === 'list'} onClick={() => setViewMode((mode) => mode === 'map' ? 'list' : 'map')}>{viewMode === 'map' ? 'รายการทั้งหมด' : 'กลับไปแผนที่'}</button>
       {mapError && <div className="map-error" role="status">โหลดแผนที่ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่ <button onClick={() => { setMapError(false); setLayer((current) => current); tiles.current?.redraw(); }}>ลองอีกครั้ง</button></div>}
       <button type="button" className={`mobile-locate${selected ? ' above-card' : ''}${locationStatus === 'found' ? ' is-located' : ''}`} onClick={locate} disabled={locationStatus === 'loading'} aria-busy={locationStatus === 'loading'} aria-label={locationStatus === 'loading' ? 'กำลังค้นหาตำแหน่งของฉัน' : 'แสดงตำแหน่งของฉัน'} title="แสดงตำแหน่งของฉัน">
         {locationStatus === 'loading' ? <LoaderCircle className="location-spinner" size={24} aria-hidden="true" /> : <LocateFixed size={24} aria-hidden="true" />}
